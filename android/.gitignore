@@ -1,0 +1,12 @@
+/gradle/wrapper/gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+
+# Keep generated wrapper files in source control for repeatable builds.
+!gradle/wrapper/gradle-wrapper.jar
+!gradlew
+!gradlew.bat
