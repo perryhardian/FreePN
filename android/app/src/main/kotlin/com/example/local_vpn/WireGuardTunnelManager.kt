@@ -15,6 +15,7 @@ import java.util.concurrent.Executors
 
 class WireGuardTunnelManager private constructor(context: Context) {
     private val appContext = context.applicationContext
+    private val diagnostics = VpnDiagnostics(appContext)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
 
@@ -28,6 +29,7 @@ class WireGuardTunnelManager private constructor(context: Context) {
             override fun getName(): String = TUNNEL_NAME
 
             override fun onStateChange(newState: Tunnel.State) {
+                diagnostics.event("TUNNEL_STATE_${newState.name}")
                 status =
                     when (newState) {
                         Tunnel.State.UP -> Status.CONNECTED
@@ -46,6 +48,7 @@ class WireGuardTunnelManager private constructor(context: Context) {
 
     fun connect(configText: String, result: MethodChannel.Result) {
         if (status == Status.CONNECTING || status == Status.DISCONNECTING) {
+            diagnostics.error("VPN_OPERATION_IN_PROGRESS")
             result.error(
                 "VPN_OPERATION_IN_PROGRESS",
                 "Another VPN operation is already in progress.",
@@ -54,14 +57,17 @@ class WireGuardTunnelManager private constructor(context: Context) {
             return
         }
         if (status == Status.CONNECTED) {
+            diagnostics.event("TUNNEL_ALREADY_UP")
             result.success(Status.CONNECTED.platformValue)
             return
         }
 
         status = Status.CONNECTING
+        diagnostics.event("TUNNEL_STARTING")
         executor.execute {
             try {
                 val config = parseConfig(configText)
+                diagnostics.event("CONFIGURATION_PARSED")
                 val finalState = backend.setState(tunnel, Tunnel.State.UP, config)
                 status =
                     if (finalState == Tunnel.State.UP) {
@@ -71,6 +77,7 @@ class WireGuardTunnelManager private constructor(context: Context) {
                     }
 
                 if (status == Status.CONNECTED) {
+                    diagnostics.event("TUNNEL_START_COMPLETED")
                     completeSuccess(result, status.platformValue)
                 } else {
                     completeError(
@@ -112,7 +119,9 @@ class WireGuardTunnelManager private constructor(context: Context) {
     }
 
     fun disconnect(result: MethodChannel.Result) {
+        diagnostics.event("DISCONNECT_REQUESTED")
         if (status == Status.CONNECTING || status == Status.DISCONNECTING) {
+            diagnostics.error("VPN_OPERATION_IN_PROGRESS")
             result.error(
                 "VPN_OPERATION_IN_PROGRESS",
                 "Another VPN operation is already in progress.",
@@ -121,6 +130,7 @@ class WireGuardTunnelManager private constructor(context: Context) {
             return
         }
         if (status == Status.DISCONNECTED) {
+            diagnostics.event("TUNNEL_ALREADY_DOWN")
             result.success(Status.DISCONNECTED.platformValue)
             return
         }
@@ -130,6 +140,7 @@ class WireGuardTunnelManager private constructor(context: Context) {
             try {
                 backend.setState(tunnel, Tunnel.State.DOWN, null)
                 status = Status.DISCONNECTED
+                diagnostics.event("TUNNEL_STOP_COMPLETED")
                 completeSuccess(result, status.platformValue)
             } catch (_: Exception) {
                 status = Status.ERROR
@@ -156,6 +167,7 @@ class WireGuardTunnelManager private constructor(context: Context) {
         code: String,
         message: String,
     ) {
+        diagnostics.error(code)
         mainHandler.post { result.error(code, message, null) }
     }
 

@@ -9,6 +9,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private val diagnostics by lazy { VpnDiagnostics(applicationContext) }
     private val tunnelManager by lazy {
         WireGuardTunnelManager.getInstance(applicationContext)
     }
@@ -25,6 +26,9 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        if (pendingPermissionResult != null) {
+            diagnostics.error("ACTIVITY_CLOSED_DURING_PERMISSION")
+        }
         channel?.setMethodCallHandler(null)
         channel = null
         pendingPermissionResult?.error(
@@ -47,6 +51,7 @@ class MainActivity : FlutterActivity() {
         pendingConfigText = null
 
         if (resultCode != Activity.RESULT_OK) {
+            diagnostics.error("VPN_PERMISSION_DENIED")
             tunnelManager.markError()
             result.error(
                 "VPN_PERMISSION_DENIED",
@@ -56,6 +61,7 @@ class MainActivity : FlutterActivity() {
             return
         }
 
+        diagnostics.event("VPN_PERMISSION_GRANTED")
         continueConnect(configText, result)
     }
 
@@ -69,7 +75,9 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun requestConnect(configText: String?, result: MethodChannel.Result) {
+        diagnostics.event("CONNECT_REQUESTED")
         if (pendingPermissionResult != null) {
+            diagnostics.error("VPN_REQUEST_IN_PROGRESS")
             result.error(
                 "VPN_REQUEST_IN_PROGRESS",
                 "A VPN permission request is already in progress.",
@@ -80,17 +88,20 @@ class MainActivity : FlutterActivity() {
 
         val permissionIntent = VpnService.prepare(this)
         if (permissionIntent == null) {
+            diagnostics.event("VPN_PERMISSION_ALREADY_GRANTED")
             continueConnect(configText, result)
             return
         }
 
         pendingPermissionResult = result
         pendingConfigText = configText
+        diagnostics.event("VPN_PERMISSION_REQUESTED")
         startActivityForResult(permissionIntent, VPN_PERMISSION_REQUEST_CODE)
     }
 
     private fun continueConnect(configText: String?, result: MethodChannel.Result) {
         if (configText.isNullOrBlank()) {
+            diagnostics.error("MISSING_VPN_CONFIGURATION")
             tunnelManager.markError()
             result.error(
                 "MISSING_VPN_CONFIGURATION",
