@@ -31,6 +31,7 @@ class MethodChannelVpnService implements VpnService {
     } on PlatformException catch (error) {
       throw VpnServiceException(
         error.message ?? 'Android could not start the VPN connection.',
+        code: error.code,
       );
     }
   }
@@ -47,6 +48,7 @@ class MethodChannelVpnService implements VpnService {
     } on PlatformException catch (error) {
       throw VpnServiceException(
         error.message ?? 'Android could not stop the VPN connection.',
+        code: error.code,
       );
     }
   }
@@ -61,15 +63,17 @@ class MethodChannelVpnService implements VpnService {
     } on PlatformException catch (error) {
       throw VpnServiceException(
         error.message ?? 'Android could not report the VPN status.',
+        code: error.code,
       );
     }
   }
 }
 
 class VpnServiceException implements Exception {
-  const VpnServiceException(this.message);
+  const VpnServiceException(this.message, {this.code});
 
   final String message;
+  final String? code;
 
   @override
   String toString() => message;
