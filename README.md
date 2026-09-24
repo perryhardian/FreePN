@@ -9,14 +9,17 @@ An Android-first Flutter starter for a local WireGuard VPN client.
 - Phase 3: `VpnService` abstraction backed by a Flutter method channel
 - Phase 4: Android VPN permission flow and official WireGuard tunnel backend
 - Phase 5: Runtime WireGuard keys and complete local client configuration
+- Phase 6: [Windows laptop server setup guide](docs/local-wireguard-server-windows.md)
 
 The app builds a complete configuration at runtime and passes it to the existing
 Android permission flow and official WireGuard tunnel backend.
 
 ## Local development configuration
 
-1. Configure your laptop's WireGuard server and generate a separate client key
-   pair locally (Phase 6). The server peer must use the **client public key**.
+1. Follow the [Phase 6 Windows server guide](docs/local-wireguard-server-windows.md)
+   to configure the laptop and generate separate server/client key pairs.
+   The server peer must use the **client public key**. A placeholder-only
+   [server configuration](config/freepn-server.conf.example) is included.
 2. On Android, enter your laptop's current LAN IPv4 address or hostname and port
    in **Server endpoint**, for example `192.168.1.10:51820`.
 3. Open **Configure WireGuard keys**. Enter the **client private key** and

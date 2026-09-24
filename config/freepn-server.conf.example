@@ -1,0 +1,9 @@
+# Placeholder example only. Copy outside the repository before adding keys.
+[Interface]
+PrivateKey = SERVER_PRIVATE_KEY
+Address = 10.10.0.1/24
+ListenPort = 51820
+
+[Peer]
+PublicKey = CLIENT_PUBLIC_KEY
+AllowedIPs = 10.10.0.2/32
