@@ -40,7 +40,13 @@ class MethodChannelVpnService implements VpnService {
   Future<VpnStatus> disconnect() async {
     try {
       final result = await _channel.invokeMethod<String>('disconnect');
-      return VpnStatus.fromPlatformValue(result);
+      if (result?.trim().toLowerCase() != 'disconnected') {
+        throw const VpnServiceException(
+          'Android did not confirm the VPN stopped.',
+          code: 'TUNNEL_STOP_UNCONFIRMED',
+        );
+      }
+      return VpnStatus.disconnected;
     } on MissingPluginException {
       throw const VpnServiceException(
         'Android VPN integration is not available yet.',

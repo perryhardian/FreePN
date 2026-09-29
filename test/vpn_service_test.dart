@@ -13,6 +13,37 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+  for (final reply in <String?>[
+    null,
+    '',
+    'unexpected',
+    'error',
+    'connected',
+    'disconnecting',
+  ]) {
+    test('disconnect requires explicit confirmation: $reply', () async {
+      messenger.setMockMethodCallHandler(channel, (_) async => reply);
+      await expectLater(
+        const MethodChannelVpnService().disconnect(),
+        throwsA(
+          isA<VpnServiceException>().having(
+            (error) => error.code,
+            'code',
+            'TUNNEL_STOP_UNCONFIRMED',
+          ),
+        ),
+      );
+    });
+  }
+
+  test('disconnect accepts a confirmed stopped tunnel', () async {
+    messenger.setMockMethodCallHandler(channel, (_) async => 'disconnected');
+    expect(
+      await const MethodChannelVpnService().disconnect(),
+      VpnStatus.disconnected,
+    );
+  });
+
   test(
     'delivers complete runtime config to the existing Android channel',
     () async {

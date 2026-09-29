@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Duration _connectionDuration = Duration.zero;
   Timer? _durationTimer;
   String? _errorMessage;
+  bool _disconnectNeedsRetry = false;
   String _privateKey = '';
   String _serverPublicKey = '';
 
@@ -100,6 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _disconnect() async {
+    if (_isBusy) return;
     setState(() {
       _status = VpnStatus.disconnecting;
       _errorMessage = null;
@@ -108,18 +110,30 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final status = await _vpnService.disconnect();
       if (!mounted) return;
+      if (status != VpnStatus.disconnected) {
+        _handleDisconnectFailure('Android did not confirm the VPN stopped.');
+        return;
+      }
       _durationTimer?.cancel();
       setState(() {
         _status = status;
+        _disconnectNeedsRetry = false;
         _connectionDuration = Duration.zero;
       });
     } on VpnServiceException catch (error) {
       if (!mounted) return;
-      setState(() {
-        _status = VpnStatus.error;
-        _errorMessage = error.message;
-      });
+      _handleDisconnectFailure(error.message);
     }
+  }
+
+  void _handleDisconnectFailure(String message) {
+    // The tunnel may still be active. Keep cleanup available before reconnecting.
+    _durationTimer?.cancel();
+    setState(() {
+      _status = VpnStatus.error;
+      _disconnectNeedsRetry = true;
+      _errorMessage = '$message The VPN may still be active. Retry Disconnect.';
+    });
   }
 
   void _startDurationTimer() {
@@ -148,8 +162,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canConnect = !_isBusy && _status != VpnStatus.connected;
-    final canDisconnect = !_isBusy && _status == VpnStatus.connected;
+    final canConnect =
+        !_isBusy && _status != VpnStatus.connected && !_disconnectNeedsRetry;
+    final canDisconnect =
+        !_isBusy && (_status == VpnStatus.connected || _disconnectNeedsRetry);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Local VPN'), centerTitle: false),
@@ -173,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _endpointController,
-                    enabled: !_isBusy && _status != VpnStatus.connected,
+                    enabled: canConnect,
                     keyboardType: TextInputType.url,
                     textInputAction: TextInputAction.done,
                     autocorrect: false,
