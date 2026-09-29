@@ -3,9 +3,9 @@
 Goal: verify a real Android phone can reach the laptop at `10.10.0.1`
 through WireGuard, then disconnect and reconnect.
 
-**Status: live connectivity is not yet verified.** When this phase was prepared,
-ADB detected no device, WireGuard was absent from its default Windows install
-location, and no WireGuard service or UDP 51820 listener was detected.
+**Status: basic live connectivity and disconnect/reconnect verified from
+user-supplied device and server output, recorded on 2026-09-29.** See the test
+record below for evidence and the alternate-route caveat.
 Automated Flutter tests use a fake VPN service or mocked platform channel;
 they do not establish a real tunnel.
 
@@ -19,8 +19,9 @@ Use a physical Android phone on the same trusted LAN as the laptop. Keep the
 laptop awake and disable other VPN apps for this test. Keep routing limited
 to `10.10.0.0/24`. No internet forwarding or NAT is required.
 
-Enable Developer options and USB debugging on the phone, connect a USB data
-cable, and approve the debugging authorization prompt. In PowerShell:
+Enable Developer options and connect through USB debugging or pair and connect
+through Android wireless debugging. This test used wireless debugging because
+USB was unavailable. In PowerShell:
 
 ```powershell
 $freepnAdb = Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe'
@@ -156,8 +157,11 @@ Tap **Disconnect** in FreePN. Expect `DISCONNECT_REQUESTED`,
 `TUNNEL_STATE_DOWN`, and `TUNNEL_STOP_COMPLETED`; an already-stopped tunnel
 can report `TUNNEL_ALREADY_DOWN`.
 
-Repeat the phone address and ping checks. The VPN address should disappear,
-and reaching `10.10.0.1` should fail as it did at baseline.
+Repeat the phone address and ping checks. The VPN address should disappear.
+If the destination is unreachable outside the VPN, ping should fail as at
+baseline. If ping still succeeds, inspect the disconnected route and compare
+server traffic counters during connected tests; do not assume the VPN remains
+active. See the alternate-route finding below.
 The server may retain the old handshake timestamp; it is not proof of a
 currently active client.
 
@@ -167,22 +171,72 @@ and server counter comparison. Confirm a new handshake and successful traffic.
 Keep the app process running for this reconnect test. If the process restarts,
 the runtime keys must be entered again.
 
-## Record the result
+## Live test record: 2026-09-29
 
-Copy this checklist into your local test notes. Leave untested rows unverified.
-Record device model, Android version, build commit, date, ping summary, and
-whether counters increased. Do not record private keys or complete configs.
+Evidence comes from commands run by the user and pasted into the project
+conversation. Phone: Samsung SM A336E, Android 14 (API 34), connected through
+wireless ADB. App: Flutter debug build. Repository HEAD when recording was
+`f19df42` (VPN connectivity diagnostics); the installed APK's exact commit was
+not independently verified. No private keys or full configurations are included.
 
 | Check | Required evidence | Current live result |
 | --- | --- | --- |
-| Permission | Approved prompt or already-granted event | Unverified |
-| Server address | Laptop adapter has 10.10.0.1/24 | Unverified |
-| Client address | Phone VPN interface has 10.10.0.2/24 | Unverified |
-| Activation | Native UP event and app Connected | Unverified |
-| Handshake | Recent timestamp for the matching peer | Unverified |
-| Reachability | Phone ping replies and traffic counters increase | Unverified |
-| Disconnect | Native DOWN, address removed, ping stops | Unverified |
-| Reconnect | Address restored, fresh handshake, ping works | Unverified |
+| Permission | Approved prompt or already-granted event | Permission flow not separately captured; successful tunnel operation confirms permission was available |
+| Server address | Laptop adapter has 10.10.0.1/24 | User reported Phase 6 completion; adapter output not captured; connected traffic to 10.10.0.1 verified |
+| Client address | Phone VPN interface has 10.10.0.2/24 | Verified on active tun0 after reconnect, MTU 1280 |
+| Activation | App Connected and live tunnel evidence | User reported Connected; tun0, handshake, and traffic verified; native UP log not captured |
+| Handshake | Recent timestamp for the matching peer | Verified: 7 seconds old after reconnect; 56 seconds old at subsequent counter check |
+| Reachability | Phone ping replies and traffic counters increase | Verified: 10 sent, 10 received, 0% loss; counters increased as detailed below |
+| Disconnect | VPN interface and address removed | Verified: only lo and wlan0 remained; ping used an alternate route; native DOWN log not captured |
+| Reconnect | Address restored, fresh handshake, ping works | Verified: tun0 restored, fresh handshake, 10 successful pings, and increased counters |
+
+### Issues resolved during the test
+
+- The laptop's Wi-Fi address changed from `192.168.1.4` to `192.168.1.9`.
+  Updating FreePN's endpoint to `192.168.1.9:51820` produced a handshake.
+  These are observed test addresses, not permanent defaults.
+- The `FreePN-VPN-Ping` firewall rule was missing. After creating the Phase 6
+  rule (ICMPv4 echo requests from `10.10.0.2` to `10.10.0.1`), connected ping
+  changed from 4/4 lost to 4/4 received, with replies showing TTL 128.
+- Reading server status required administrator PowerShell.
+
+### Reconnect traffic evidence
+
+The phone's LAN address was `192.168.1.10/24`. After reconnect, the server
+reported that peer at UDP endpoint `192.168.1.10:41998`, with allowed IP
+`10.10.0.2/32` and a handshake 7 seconds old.
+
+| Server counter | Before 10 pings | After 10 pings |
+| --- | --- | --- |
+| Received | 1.71 KiB | 3.03 KiB |
+| Sent | 820 B | 2.05 KiB |
+
+Phone-side ping to `10.10.0.1`: 10 transmitted, 10 received, 0% packet loss;
+RTT min/avg/max was 4.813/14.860/18.164 ms, with TTL 128 in every reply.
+Together with the fresh handshake and active `tun0` address, the increased
+bidirectional counters corroborate traffic through WireGuard. Counter deltas
+can include keepalives and handshake traffic, not just ping payloads.
+
+### Alternate-route caveat
+
+After disconnect, the phone had only `lo` and `wlan0`; `10.10.0.2` and the VPN
+interface were absent. However, 4/4 pings to `10.10.0.1` still received replies,
+now with TTL 63. The disconnected route query returned:
+
+```text
+10.10.0.1 via 192.168.1.1 dev wlan0 table 1023 src 192.168.1.10 uid 2000
+```
+
+This confirms an alternate route through the Wi-Fi gateway. The identity of
+the responder beyond that gateway is unknown; the TTL difference alone does
+not identify it. This is an address/routing overlap to investigate, not evidence
+that FreePN's VPN interface remained active.
+
+For this test, disconnect is supported by interface removal and reconnection
+by interface restoration, handshake, and traffic evidence. Before relying on
+ping failure as an isolation check, choose a VPN subnet verified to be unused
+on this network and update both client and server consistently. No subnet or
+full-tunnel changes were made as part of recording these results.
 
 ## If a check fails
 

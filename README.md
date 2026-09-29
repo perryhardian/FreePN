@@ -10,7 +10,7 @@ An Android-first Flutter starter for a local WireGuard VPN client.
 - Phase 4: Android VPN permission flow and official WireGuard tunnel backend
 - Phase 5: Runtime WireGuard keys and complete local client configuration
 - Phase 6: [Windows laptop server setup guide](docs/local-wireguard-server-windows.md)
-- Phase 7 preparation: debug lifecycle logs and a [live connectivity test guide](docs/local-connectivity-test.md); real-device verification remains pending
+- Phase 7: basic real-device connectivity and disconnect/reconnect verified; see the [test record and alternate-route caveat](docs/local-connectivity-test.md#live-test-record-2026-09-29)
 
 The app builds a complete configuration at runtime and passes it to the existing
 Android permission flow and official WireGuard tunnel backend.
