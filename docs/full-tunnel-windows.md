@@ -25,7 +25,7 @@ do not delete or replace an existing NAT or disable Windows Firewall.
    ```powershell
    Get-NetIPConfiguration
    Get-NetIPInterface -AddressFamily IPv4 -InterfaceAlias 'freepn-server','Wi-Fi' | Select-Object InterfaceAlias,Forwarding
-   Get-NetNat | Select-Object Name,InternalIPInterfaceAddressPrefix
+   Get-NetNat -ErrorAction Stop | Select-Object Name,InternalIPInterfaceAddressPrefix
    ```
 
    Replace `Wi-Fi` in this guide if your internet-facing interface has a
@@ -34,12 +34,25 @@ do not delete or replace an existing NAT or disable Windows Firewall.
    with another internal prefix. Do not remove Docker, WSL, Hyper-V, or other
    NAT objects just for this test. See [Microsoft's WinNAT guidance](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/setup-nat-network).
 
-   On the development laptop, a read-only `Get-NetNat` attempt returned
-   `Invalid class` in the current shell. That is **not** evidence that no NAT
-   exists. Repeat the check in administrator PowerShell; if it still errors,
-   stop before `New-NetNat` and diagnose Windows NAT support separately.
+   On the development laptop (Windows 11 Home), read-only checks in a
+   non-administrator shell found no `MSFT_NetNat` CIM class; `Get-NetNat`
+   returned `Invalid class` in both PowerShell 7 and Windows PowerShell 5.1.
+   That is **not** evidence that no NAT exists. In administrator PowerShell,
+   repeat `Get-NetNat -ErrorAction Stop` and check the class with:
 
-2. If there is no conflicting NAT, enable IPv4 forwarding on the WireGuard
+   ```powershell
+   Get-CimClass -Namespace root/StandardCimv2 -ClassName MSFT_NetNat -ErrorAction Stop
+   ```
+
+   If either command errors, stop before changing forwarding or calling
+   `New-NetNat`. The NAT provider or host support must be resolved separately;
+   do not interpret an error as an empty NAT list. Do not enable Internet
+   Connection Sharing as an automatic workaround: it provides its own address
+   assignment on the private interface and may break this tunnel's static
+   `10.10.0.1/24` setup. See [Microsoft's ICS description](https://learn.microsoft.com/en-us/windows/win32/nativewifi/using-hosted-network-and-internet-connection-sharing).
+
+2. Only if both checks above succeed and there is no conflicting NAT, enable
+   IPv4 forwarding on the WireGuard
    interface and internet-facing interface, then create one NAT for FreePN's
    VPN subnet:
 
