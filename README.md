@@ -19,9 +19,17 @@ Phase 8 is in progress. If disconnect fails or Android does not confirm a
 disconnected state, the UI warns that the tunnel may still be active and keeps
 Disconnect available for retry. Connect, endpoint editing, and key editing stay
 disabled until a retry confirms disconnection. The duration freezes on failure
-and resets only after confirmed disconnection. Recovery currently applies while
-the same screen instance is running; restoring uncertain state after an app
-restart and detecting network loss or missing handshakes remain future work.
+and resets only after confirmed disconnection.
+
+The screen checks Android's reported status on startup, when returning to the
+app, and when tapping **Refresh status** in the top bar. Controls are locked
+while that check runs (up to five seconds). An unavailable, unknown, or error
+status offers Refresh or Disconnect for recovery instead of assuming the tunnel
+is down. Confirmed external disconnection resets the timer and unlocks settings.
+Status checks do not overlap an app-initiated connect/disconnect operation.
+These checks use the native manager's reported tunnel state; they do not prove
+server reachability or restore the elapsed connection time across process
+restarts. Network-loss and missing-handshake detection remain future Phase 8 work.
 
 ## Local development configuration
 

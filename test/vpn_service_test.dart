@@ -13,6 +13,31 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+  test(
+    'missing native status integration does not imply disconnection',
+    () async {
+      messenger.setMockMethodCallHandler(
+        channel,
+        (_) async => throw MissingPluginException(),
+      );
+      await expectLater(
+        const MethodChannelVpnService().getStatus(),
+        throwsA(
+          isA<VpnServiceException>().having(
+            (error) => error.code,
+            'code',
+            'VPN_STATUS_UNAVAILABLE',
+          ),
+        ),
+      );
+    },
+  );
+
+  test('unrecognized native status stays uncertain', () async {
+    messenger.setMockMethodCallHandler(channel, (_) async => 'unknown');
+    expect(await const MethodChannelVpnService().getStatus(), VpnStatus.error);
+  });
+
   for (final reply in <String?>[
     null,
     '',

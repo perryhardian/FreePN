@@ -5,7 +5,11 @@ void main() {
   test('parses platform VPN states', () {
     expect(VpnStatus.fromPlatformValue('connected'), VpnStatus.connected);
     expect(VpnStatus.fromPlatformValue('CONNECTING'), VpnStatus.connecting);
-    expect(VpnStatus.fromPlatformValue(null), VpnStatus.disconnected);
-    expect(VpnStatus.fromPlatformValue('unknown'), VpnStatus.disconnected);
+    expect(
+      VpnStatus.fromPlatformValue(' disconnected '),
+      VpnStatus.disconnected,
+    );
+    expect(VpnStatus.fromPlatformValue(null), VpnStatus.error);
+    expect(VpnStatus.fromPlatformValue('unknown'), VpnStatus.error);
   });
 }

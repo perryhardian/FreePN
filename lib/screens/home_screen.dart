@@ -18,7 +18,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final VpnService _vpnService;
   late final TextEditingController _endpointController;
   VpnStatus _status = VpnStatus.disconnected;
@@ -26,15 +26,21 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _durationTimer;
   String? _errorMessage;
   bool _disconnectNeedsRetry = false;
+  bool _isRefreshing = false;
+  bool _operationInProgress = false;
   String _privateKey = '';
   String _serverPublicKey = '';
 
   bool get _isBusy =>
-      _status == VpnStatus.connecting || _status == VpnStatus.disconnecting;
+      _isRefreshing ||
+      _operationInProgress ||
+      _status == VpnStatus.connecting ||
+      _status == VpnStatus.disconnecting;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _vpnService = widget.vpnService ?? const MethodChannelVpnService();
     _endpointController = TextEditingController(
       text: VpnDefaults.serverEndpoint,
@@ -44,27 +50,64 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _durationTimer?.cancel();
     _endpointController.dispose();
     super.dispose();
   }
 
   Future<void> _loadStatus() async {
+    if (_isRefreshing || _operationInProgress) return;
+    setState(() => _isRefreshing = true);
     try {
-      final status = await _vpnService.getStatus();
+      final status = await _vpnService.getStatus().timeout(
+        const Duration(seconds: 5),
+      );
       if (!mounted) return;
-      setState(() => _status = status);
-      if (status == VpnStatus.connected) _startDurationTimer();
+      if (status == VpnStatus.error) {
+        _handleStatusFailure('Android could not confirm the tunnel state.');
+      } else {
+        _durationTimer?.cancel();
+        setState(() {
+          _status = status;
+          _disconnectNeedsRetry = false;
+          _errorMessage = null;
+          if (status == VpnStatus.disconnected) {
+            _connectionDuration = Duration.zero;
+          }
+        });
+        if (status == VpnStatus.connected) _startDurationTimer();
+      }
     } on VpnServiceException catch (error) {
       if (!mounted) return;
-      setState(() {
-        _status = VpnStatus.error;
-        _errorMessage = error.message;
-      });
+      _handleStatusFailure(error.message);
+    } on TimeoutException {
+      if (!mounted) return;
+      _handleStatusFailure('Checking the VPN status timed out.');
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
     }
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_loadStatus());
+  }
+
+  void _handleStatusFailure(String message) {
+    _durationTimer?.cancel();
+    setState(() {
+      _status = VpnStatus.error;
+      _disconnectNeedsRetry = true;
+      _errorMessage =
+          '$message Refresh status or use Disconnect before reconnecting.';
+    });
+  }
+
   Future<void> _connect() async {
+    if (_isBusy || _disconnectNeedsRetry || _status == VpnStatus.connected) {
+      return;
+    }
     FocusManager.instance.primaryFocus?.unfocus();
     late final VpnConfiguration configuration;
     try {
@@ -83,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _status = VpnStatus.connecting;
+      _operationInProgress = true;
       _errorMessage = null;
     });
 
@@ -97,6 +141,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _status = VpnStatus.error;
         _errorMessage = error.message;
       });
+    } finally {
+      if (mounted) setState(() => _operationInProgress = false);
     }
   }
 
@@ -104,6 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isBusy) return;
     setState(() {
       _status = VpnStatus.disconnecting;
+      _operationInProgress = true;
       _errorMessage = null;
     });
 
@@ -123,6 +170,8 @@ class _HomeScreenState extends State<HomeScreen> {
     } on VpnServiceException catch (error) {
       if (!mounted) return;
       _handleDisconnectFailure(error.message);
+    } finally {
+      if (mounted) setState(() => _operationInProgress = false);
     }
   }
 
@@ -168,7 +217,19 @@ class _HomeScreenState extends State<HomeScreen> {
         !_isBusy && (_status == VpnStatus.connected || _disconnectNeedsRetry);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Local VPN'), centerTitle: false),
+      appBar: AppBar(
+        title: const Text('Local VPN'),
+        centerTitle: false,
+        actions: [
+          IconButton(
+            tooltip: 'Refresh status',
+            onPressed: _isRefreshing || _operationInProgress
+                ? null
+                : _loadStatus,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -179,6 +240,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   VpnStatusCard(status: _status, duration: _connectionDuration),
+                  if (_isRefreshing)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Checking VPN status...',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   const SizedBox(height: 24),
                   Text(
                     'Connection details',

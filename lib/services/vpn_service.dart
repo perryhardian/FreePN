@@ -65,7 +65,10 @@ class MethodChannelVpnService implements VpnService {
       final result = await _channel.invokeMethod<String>('getStatus');
       return VpnStatus.fromPlatformValue(result);
     } on MissingPluginException {
-      return VpnStatus.disconnected;
+      throw const VpnServiceException(
+        'Android VPN status is unavailable. Reopen the app on your Android device.',
+        code: 'VPN_STATUS_UNAVAILABLE',
+      );
     } on PlatformException catch (error) {
       throw VpnServiceException(
         error.message ?? 'Android could not report the VPN status.',

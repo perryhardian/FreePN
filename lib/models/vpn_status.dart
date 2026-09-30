@@ -15,11 +15,12 @@ enum VpnStatus {
 
   static VpnStatus fromPlatformValue(String? value) {
     return switch (value?.trim().toLowerCase()) {
+      'disconnected' => VpnStatus.disconnected,
       'connecting' => VpnStatus.connecting,
       'connected' => VpnStatus.connected,
       'disconnecting' => VpnStatus.disconnecting,
       'error' => VpnStatus.error,
-      _ => VpnStatus.disconnected,
+      _ => VpnStatus.error,
     };
   }
 }
