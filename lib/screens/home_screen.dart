@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/vpn_configuration.dart';
+import '../models/vpn_peer_health.dart';
 import '../models/vpn_status.dart';
 import '../services/vpn_service.dart';
 import '../utils/vpn_defaults.dart';
@@ -25,6 +26,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Duration _connectionDuration = Duration.zero;
   Timer? _durationTimer;
   String? _errorMessage;
+  String? _healthMessage;
+  bool _healthCheckInProgress = false;
+  int _sessionRevision = 0;
   bool _disconnectNeedsRetry = false;
   bool _isRefreshing = false;
   bool _operationInProgress = false;
@@ -58,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadStatus() async {
     if (_isRefreshing || _operationInProgress) return;
+    _sessionRevision++;
     setState(() => _isRefreshing = true);
     try {
       final status = await _vpnService.getStatus().timeout(
@@ -72,11 +77,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _status = status;
           _disconnectNeedsRetry = false;
           _errorMessage = null;
+          if (status != VpnStatus.connected) _healthMessage = null;
           if (status == VpnStatus.disconnected) {
             _connectionDuration = Duration.zero;
           }
         });
         if (status == VpnStatus.connected) _startDurationTimer();
+        if (status == VpnStatus.connected) unawaited(_checkHealth());
       }
     } on VpnServiceException catch (error) {
       if (!mounted) return;
@@ -99,6 +106,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _status = VpnStatus.error;
       _disconnectNeedsRetry = true;
+      _healthMessage = null;
       _errorMessage =
           '$message Refresh status or use Disconnect before reconnecting.';
     });
@@ -125,16 +133,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     setState(() {
+      _sessionRevision++;
       _status = VpnStatus.connecting;
       _operationInProgress = true;
       _errorMessage = null;
+      _healthMessage = null;
     });
 
     try {
       final status = await _vpnService.connect(configuration);
       if (!mounted) return;
       setState(() => _status = status);
-      if (status == VpnStatus.connected) _startDurationTimer();
+      if (status == VpnStatus.connected) {
+        _startDurationTimer();
+        unawaited(_checkHealth());
+      }
     } on VpnServiceException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -149,9 +162,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _disconnect() async {
     if (_isBusy) return;
     setState(() {
+      _sessionRevision++;
       _status = VpnStatus.disconnecting;
       _operationInProgress = true;
       _errorMessage = null;
+      _healthMessage = null;
     });
 
     try {
@@ -190,7 +205,78 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _connectionDuration += const Duration(seconds: 1));
+      if (_connectionDuration.inSeconds % 5 == 0) {
+        unawaited(_checkHealth());
+      }
     });
+  }
+
+  Future<void> _checkHealth() async {
+    if (_status != VpnStatus.connected || _healthCheckInProgress) return;
+    final revision = _sessionRevision;
+    _healthCheckInProgress = true;
+    try {
+      final health = await _vpnService.getPeerHealth().timeout(
+        const Duration(seconds: 5),
+      );
+      if (!mounted ||
+          revision != _sessionRevision ||
+          _status != VpnStatus.connected) {
+        return;
+      }
+      if (health.status == VpnStatus.disconnected) {
+        _durationTimer?.cancel();
+        setState(() {
+          _status = VpnStatus.disconnected;
+          _connectionDuration = Duration.zero;
+          _healthMessage = null;
+          _errorMessage =
+              'The VPN tunnel stopped. Check your network and reconnect.';
+        });
+      } else if (health.status != VpnStatus.connected) {
+        _handleStatusFailure('Android could not confirm the tunnel state.');
+      } else {
+        setState(() => _healthMessage = _peerHealthMessage(health));
+      }
+    } on VpnServiceException {
+      if (mounted &&
+          revision == _sessionRevision &&
+          _status == VpnStatus.connected) {
+        setState(
+          () => _healthMessage =
+              'Could not check the server handshake. Try Refresh status.',
+        );
+      }
+    } on TimeoutException {
+      if (mounted &&
+          revision == _sessionRevision &&
+          _status == VpnStatus.connected) {
+        setState(
+          () => _healthMessage =
+              'Checking the server handshake timed out. Try Refresh status.',
+        );
+      }
+    } finally {
+      _healthCheckInProgress = false;
+    }
+  }
+
+  String? _peerHealthMessage(VpnPeerHealth health) {
+    if (!health.localNetworkAvailable) {
+      return 'No Wi-Fi or Ethernet network is available. Reconnect to the local network.';
+    }
+    if (health.latestHandshakeEpochMillis == 0) {
+      return _connectionDuration.inSeconds >= 30
+          ? 'No server handshake yet. Check the endpoint, Wi-Fi, firewall, and keys.'
+          : 'Waiting for the server handshake...';
+    }
+    final age =
+        DateTime.now().millisecondsSinceEpoch -
+        health.latestHandshakeEpochMillis;
+    if (age > const Duration(minutes: 2).inMilliseconds) {
+      return 'Server handshake is old. Check the local network and server.';
+    }
+    return 'Server handshake verified.';
   }
 
   Future<void> _editKeys() async {
@@ -240,6 +326,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   VpnStatusCard(status: _status, duration: _connectionDuration),
+                  if (_healthMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_healthMessage!, textAlign: TextAlign.center),
+                  ],
                   if (_isRefreshing)
                     const Padding(
                       padding: EdgeInsets.only(top: 8),

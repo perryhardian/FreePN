@@ -1,6 +1,8 @@
 package com.example.local_vpn
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import com.wireguard.android.backend.GoBackend
@@ -44,6 +46,40 @@ class WireGuardTunnelManager private constructor(context: Context) {
 
     fun markError() {
         status = Status.ERROR
+    }
+
+    fun getPeerHealth(result: MethodChannel.Result) {
+        executor.execute {
+            try {
+                val nativeState = backend.getState(tunnel)
+                status = if (nativeState == Tunnel.State.UP) Status.CONNECTED else Status.DISCONNECTED
+                val handshake = if (nativeState == Tunnel.State.UP) {
+                    val statistics = backend.getStatistics(tunnel)
+                    statistics.peers().maxOfOrNull { key ->
+                        statistics.peer(key)?.latestHandshakeEpochMillis() ?: 0L
+                    } ?: 0L
+                } else {
+                    0L
+                }
+                val connectivity = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val localNetworkAvailable = connectivity.allNetworks.any { network ->
+                    val capabilities = connectivity.getNetworkCapabilities(network)
+                    capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true ||
+                        capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
+                }
+                mainHandler.post {
+                    result.success(
+                        mapOf(
+                            "status" to status.platformValue,
+                            "latestHandshakeEpochMillis" to handshake,
+                            "localNetworkAvailable" to localNetworkAvailable,
+                        ),
+                    )
+                }
+            } catch (_: Exception) {
+                completeError(result, "VPN_HEALTH_UNAVAILABLE", "Could not check the WireGuard peer. Try Refresh status.")
+            }
+        }
     }
 
     fun connect(configText: String, result: MethodChannel.Result) {

@@ -13,6 +13,39 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+  test('reads WireGuard peer health without exposing configuration', () async {
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'getPeerHealth');
+      expect(call.arguments, isNull);
+      return <String, Object>{
+        'status': 'connected',
+        'latestHandshakeEpochMillis': 123456,
+        'localNetworkAvailable': true,
+      };
+    });
+    final health = await const MethodChannelVpnService().getPeerHealth();
+    expect(health.status, VpnStatus.connected);
+    expect(health.latestHandshakeEpochMillis, 123456);
+    expect(health.localNetworkAvailable, isTrue);
+  });
+
+  test('malformed health reply is a recoverable error', () async {
+    messenger.setMockMethodCallHandler(
+      channel,
+      (_) async => <String, Object>{'status': 'connected'},
+    );
+    await expectLater(
+      const MethodChannelVpnService().getPeerHealth(),
+      throwsA(
+        isA<VpnServiceException>().having(
+          (error) => error.code,
+          'code',
+          'VPN_HEALTH_INVALID',
+        ),
+      ),
+    );
+  });
+
   test(
     'missing native status integration does not imply disconnection',
     () async {

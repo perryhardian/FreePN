@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_vpn/models/vpn_configuration.dart';
+import 'package:local_vpn/models/vpn_peer_health.dart';
 import 'package:local_vpn/models/vpn_status.dart';
 import 'package:local_vpn/screens/home_screen.dart';
 import 'package:local_vpn/services/vpn_service.dart';
@@ -147,6 +148,13 @@ class StatusService implements VpnService {
   int disconnectCalls = 0;
   Completer<VpnStatus>? pendingStatus;
   Completer<VpnStatus>? pendingDisconnect;
+
+  @override
+  Future<VpnPeerHealth> getPeerHealth() async => const VpnPeerHealth(
+    status: VpnStatus.connected,
+    latestHandshakeEpochMillis: 0,
+    localNetworkAvailable: true,
+  );
 
   @override
   Future<VpnStatus> getStatus() async {

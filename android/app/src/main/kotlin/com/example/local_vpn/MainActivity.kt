@@ -70,6 +70,7 @@ class MainActivity : FlutterActivity() {
             "connect" -> requestConnect(call.argument<String>("configText"), result)
             "disconnect" -> tunnelManager.disconnect(result)
             "getStatus" -> result.success(tunnelManager.statusValue)
+            "getPeerHealth" -> tunnelManager.getPeerHealth(result)
             else -> result.notImplemented()
         }
     }

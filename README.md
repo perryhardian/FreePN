@@ -29,7 +29,14 @@ is down. Confirmed external disconnection resets the timer and unlocks settings.
 Status checks do not overlap an app-initiated connect/disconnect operation.
 These checks use the native manager's reported tunnel state; they do not prove
 server reachability or restore the elapsed connection time across process
-restarts. Network-loss and missing-handshake detection remain future Phase 8 work.
+restarts.
+
+While connected, the app checks the local Wi-Fi/Ethernet network and the
+WireGuard peer handshake every five seconds. It warns after 30 seconds without
+a handshake and when the local network disappears. A tunnel can be active
+without a working server connection; these warnings do not distinguish a wrong
+key from a stopped server or blocked endpoint. Peer checks do not ping the
+server and a recent handshake does not guarantee application traffic works.
 
 ## Local development configuration
 

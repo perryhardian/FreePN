@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 import '../models/vpn_configuration.dart';
+import '../models/vpn_peer_health.dart';
 import '../models/vpn_status.dart';
 
 abstract interface class VpnService {
@@ -9,12 +10,45 @@ abstract interface class VpnService {
   Future<VpnStatus> disconnect();
 
   Future<VpnStatus> getStatus();
+
+  Future<VpnPeerHealth> getPeerHealth();
 }
 
 class MethodChannelVpnService implements VpnService {
   const MethodChannelVpnService();
 
   static const MethodChannel _channel = MethodChannel('local_vpn/vpn');
+
+  @override
+  Future<VpnPeerHealth> getPeerHealth() async {
+    try {
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'getPeerHealth',
+      );
+      if (result == null) {
+        throw const VpnServiceException(
+          'Android did not report VPN health.',
+          code: 'VPN_HEALTH_UNAVAILABLE',
+        );
+      }
+      return VpnPeerHealth.fromPlatformValue(result);
+    } on MissingPluginException {
+      throw const VpnServiceException(
+        'Android VPN health checks are unavailable.',
+        code: 'VPN_HEALTH_UNAVAILABLE',
+      );
+    } on FormatException {
+      throw const VpnServiceException(
+        'Android returned invalid VPN health data.',
+        code: 'VPN_HEALTH_INVALID',
+      );
+    } on PlatformException catch (error) {
+      throw VpnServiceException(
+        error.message ?? 'Could not check the VPN peer.',
+        code: error.code,
+      );
+    }
+  }
 
   @override
   Future<VpnStatus> connect(VpnConfiguration configuration) async {
