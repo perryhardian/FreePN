@@ -38,10 +38,11 @@ without a working server connection; these warnings do not distinguish a wrong
 key from a stopped server or blocked endpoint. Peer checks do not ping the
 server and a recent handshake does not guarantee application traffic works.
 
-Phase 9 automated checks have passed. The updated build still needs the
-[Phase 9 phone validation](docs/phase9-validation.md) before the current
-error-handling behavior can be called verified on a real device. Phase 10
-full-tunnel internet routing remains deferred.
+Phase 9 automated checks passed and the user reports that the updated build
+passed the [Phase 9 phone validation](docs/phase9-validation.md). Phase 10
+adds an opt-in IPv4 internet route; [Windows forwarding/NAT setup and live
+validation](docs/full-tunnel-windows.md) remain necessary before calling
+internet routing verified. IPv6 remains outside the VPN in this mode.
 
 ## Local development configuration
 
@@ -57,11 +58,14 @@ full-tunnel internet routing remains deferred.
 4. Tap **Connect** and approve Android's VPN permission request. Disconnect and
    reconnect use the same keys during this app session.
 
-The configuration uses client address `10.10.0.2/24`, DNS `1.1.1.1`,
-`AllowedIPs = 10.10.0.0/24`, and keepalive `25`. Only the VPN subnet is routed
-through the tunnel; internet forwarding/NAT is not enabled. The DNS address is
-outside that subnet, so DNS behavior depends on Android's underlying network;
-use the numeric server VPN address `10.10.0.1` for the first connectivity test.
+The configuration uses client address `10.10.0.2/24`, DNS `1.1.1.1`, and
+keepalive `25`. The default local mode uses `AllowedIPs = 10.10.0.0/24`;
+internet forwarding/NAT is not enabled by this app. The optional **Route
+internet IPv4 through laptop** switch uses `AllowedIPs = 0.0.0.0/0`, but needs
+the [laptop-side setup](docs/full-tunnel-windows.md) before internet access can
+work. In local mode, DNS is outside the VPN subnet, so DNS behavior depends on
+Android's underlying network; use the numeric server VPN address `10.10.0.1`
+for the first connectivity test.
 
 Keys are entered at runtime, held in memory, and never written to app storage,
 assets, build defines, or logs by this app. The private-key field is masked.

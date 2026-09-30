@@ -136,10 +136,49 @@ void main() {
     expect(find.text('Local VPN'), findsOneWidget);
     expect(find.text('Disconnected'), findsOneWidget);
     expect(find.text('Server endpoint'), findsOneWidget);
+    expect(find.text('Route internet IPv4 through laptop'), findsOneWidget);
     expect(find.text('VPN IP'), findsOneWidget);
     expect(find.text('Connect'), findsOneWidget);
     expect(find.text('Disconnect'), findsOneWidget);
     expect(find.text('00:00:00'), findsOneWidget);
+  });
+
+  testWidgets('internet routing is opt-in and locked while connected', (
+    tester,
+  ) async {
+    final service = FakeVpnService();
+    await tester.pumpWidget(MaterialApp(home: HomeScreen(vpnService: service)));
+    await tester.pump();
+
+    final routeSwitch = find.byType(SwitchListTile);
+    expect(tester.widget<SwitchListTile>(routeSwitch).value, isFalse);
+    await tester.ensureVisible(routeSwitch);
+    await tester.tap(routeSwitch);
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(routeSwitch).value, isTrue);
+
+    await tester.enterText(find.byType(TextField), '192.168.1.10:51820');
+    await tester.ensureVisible(find.text('Configure WireGuard keys'));
+    await tester.tap(find.text('Configure WireGuard keys'));
+    await tester.pumpAndSettle();
+    final fields = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(fields.at(0), base64Encode(List.filled(32, 1)));
+    await tester.enterText(fields.at(1), base64Encode(List.filled(32, 2)));
+    await tester.tap(find.text('Use keys'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Connect'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
+    await tester.pump();
+
+    expect(
+      service.configuration!.configText,
+      contains('AllowedIPs = 0.0.0.0/0'),
+    );
+    expect(tester.widget<SwitchListTile>(routeSwitch).onChanged, isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('connects through the service abstraction', (tester) async {
@@ -148,6 +187,7 @@ void main() {
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), '192.168.1.10:51820');
+    await tester.ensureVisible(find.text('Configure WireGuard keys'));
     await tester.tap(find.text('Configure WireGuard keys'));
     await tester.pumpAndSettle();
     final fields = find.descendant(

@@ -34,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _operationInProgress = false;
   String _privateKey = '';
   String _serverPublicKey = '';
+  VpnRouteMode _routeMode = VpnRouteMode.local;
 
   bool get _isBusy =>
       _isRefreshing ||
@@ -123,6 +124,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         endpoint: _endpointController.text,
         privateKey: _privateKey,
         serverPublicKey: _serverPublicKey,
+        routeMode: _routeMode,
       );
     } on FormatException catch (error) {
       setState(() {
@@ -364,6 +366,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     icon: Icons.smartphone_outlined,
                     label: 'VPN IP',
                     value: VpnDefaults.clientAddress,
+                  ),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Route internet IPv4 through laptop'),
+                    subtitle: const Text(
+                      'Requires laptop forwarding and NAT. IPv6 is not routed through this VPN.',
+                    ),
+                    value: _routeMode == VpnRouteMode.internetIpv4,
+                    onChanged: canConnect
+                        ? (enabled) => setState(
+                            () => _routeMode = enabled
+                                ? VpnRouteMode.internetIpv4
+                                : VpnRouteMode.local,
+                          )
+                        : null,
                   ),
                   TextButton.icon(
                     onPressed: canConnect ? _editKeys : null,

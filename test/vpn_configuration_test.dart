@@ -22,6 +22,19 @@ void main() {
     expect(config.endpoint, 'laptop.local:51820');
   });
 
+  test('routes all IPv4 destinations only when explicitly selected', () {
+    final config = VpnConfiguration.local(
+      endpoint: '192.168.1.10:51820',
+      privateKey: clientKey,
+      serverPublicKey: serverKey,
+      routeMode: VpnRouteMode.internetIpv4,
+    );
+
+    expect(config.configText, contains('AllowedIPs = 0.0.0.0/0\n'));
+    expect(config.configText, contains('DNS = 1.1.1.1\n'));
+    expect(config.configText, isNot(contains('AllowedIPs = ::/0')));
+  });
+
   for (final endpoint in [
     '',
     'host',

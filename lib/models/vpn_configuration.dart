@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+enum VpnRouteMode { local, internetIpv4 }
+
 class VpnConfiguration {
   factory VpnConfiguration.local({
     required String endpoint,
     required String privateKey,
     required String serverPublicKey,
+    VpnRouteMode routeMode = VpnRouteMode.local,
   }) {
     final server = endpoint.trim();
     if (!RegExp(r'^[A-Za-z0-9.-]+:[0-9]+$').hasMatch(server)) {
@@ -34,6 +37,9 @@ class VpnConfiguration {
     }
     final clientKey = _validateKey(privateKey, 'client private key');
     final peerKey = _validateKey(serverPublicKey, 'server public key');
+    final allowedIps = routeMode == VpnRouteMode.internetIpv4
+        ? '0.0.0.0/0'
+        : '10.10.0.0/24';
     return VpnConfiguration(
       endpoint: server,
       configText:
@@ -44,7 +50,7 @@ class VpnConfiguration {
           '[Peer]\n'
           'PublicKey = $peerKey\n'
           'Endpoint = $server\n'
-          'AllowedIPs = 10.10.0.0/24\n'
+          'AllowedIPs = $allowedIps\n'
           'PersistentKeepalive = 25\n',
     );
   }
