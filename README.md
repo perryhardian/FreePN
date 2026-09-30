@@ -43,6 +43,9 @@ passed the [Phase 9 phone validation](docs/phase9-validation.md). Phase 10
 adds an opt-in IPv4 internet route; [Windows forwarding/NAT setup and live
 validation](docs/full-tunnel-windows.md) remain necessary before calling
 internet routing verified. IPv6 remains outside the VPN in this mode.
+The current Windows 11 Home laptop does not expose the WinNAT class required
+by the documented host procedure, so leave the internet-routing switch off
+on this setup until a supported gateway is available.
 
 ## Local development configuration
 

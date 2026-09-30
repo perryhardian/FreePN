@@ -1,5 +1,18 @@
 # Phase 10: prepare IPv4 internet routing through the Windows laptop
 
+## Current laptop limitation
+
+The development laptop runs Windows 11 Home. The follow-up
+`Get-CimClass -Namespace root/StandardCimv2 -ClassName MSFT_NetNat` check
+returned `Not found`. The WinNAT procedure below is therefore **not available
+on this laptop as currently configured**. Do not run its forwarding or
+`New-NetNat` commands here. [Microsoft's NAT setup guide](https://learn.microsoft.com/en-us/virtualization/hyper-v-on-windows/user-guide/setup-nat-network)
+requires Hyper-V, and [Microsoft states that the Hyper-V role cannot be
+installed on Windows 11 Home](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-hyper-v?pivots=windows&tabs=gui).
+The local VPN remains usable in its default mode. IPv4 internet routing needs
+a supported gateway or a separately designed and validated alternative; do
+not treat Windows Internet Connection Sharing as a drop-in replacement.
+
 FreePN now has an opt-in **Route internet IPv4 through laptop** switch. It
 changes the client peer's `AllowedIPs` from `10.10.0.0/24` to `0.0.0.0/0`.
 The tested local mode remains the default. This switch does **not** configure
@@ -13,7 +26,7 @@ mode for leak prevention or anonymity. The DNS server is `1.1.1.1`; when the
 IPv4 default route is active, it also needs the laptop's forwarding/NAT path.
 If that path fails, disconnect in FreePN and return to local mode.
 
-## Laptop preparation (administrator PowerShell)
+## WinNAT laptop preparation (supported hosts only; not this Windows Home laptop)
 
 Use only on a trusted network you administer. The Windows laptop becomes a
 gateway for the phone. Record existing values before changing anything, and
