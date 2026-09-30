@@ -15,7 +15,7 @@ An Android-first Flutter starter for a local WireGuard VPN client.
 The app builds a complete configuration at runtime and passes it to the existing
 Android permission flow and official WireGuard tunnel backend.
 
-Phase 8 is in progress. If disconnect fails or Android does not confirm a
+Phase 8 error handling is implemented. If disconnect fails or Android does not confirm a
 disconnected state, the UI warns that the tunnel may still be active and keeps
 Disconnect available for retry. Connect, endpoint editing, and key editing stay
 disabled until a retry confirms disconnection. The duration freezes on failure
@@ -37,6 +37,11 @@ a handshake and when the local network disappears. A tunnel can be active
 without a working server connection; these warnings do not distinguish a wrong
 key from a stopped server or blocked endpoint. Peer checks do not ping the
 server and a recent handshake does not guarantee application traffic works.
+
+Phase 9 automated checks have passed. The updated build still needs the
+[Phase 9 phone validation](docs/phase9-validation.md) before the current
+error-handling behavior can be called verified on a real device. Phase 10
+full-tunnel internet routing remains deferred.
 
 ## Local development configuration
 
